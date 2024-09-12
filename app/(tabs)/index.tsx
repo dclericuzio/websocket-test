@@ -1,11 +1,52 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
+import React, { useEffect, useState } from 'react';
+import { Image, StyleSheet } from 'react-native';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { Client } from '@stomp/stompjs';
 
 export default function HomeScreen() {
+  const [price, setPrice] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const client = new Client({
+      brokerURL: 'ws://103.183.74.176:8080/fgs',
+      onConnect: (frame) => {
+        console.log('STOMP Connected: ', frame);
+
+        client.subscribe('/topic/price', (message) => {
+          console.log('Message received from STOMP:', message.body);
+          try {
+            const messageData = JSON.parse(message.body);
+            setPrice(messageData);
+          } catch (err) {
+            console.error('Error parsing STOMP message:', err);
+            setError('Error receiving data');
+          }
+        });
+      },
+      onStompError: (frame) => {
+        console.error('STOMP Error: ', frame);
+        setError('STOMP connection failed');
+      },
+      onWebSocketError: (event) => {
+        console.error('WebSocket Error: ', event);
+        setError('WebSocket connection failed');
+      },
+      onDisconnect: (frame) => {
+        console.log('STOMP Disconnected: ', frame);
+      },
+    });
+
+    client.activate();
+
+    return () => {
+      console.log('Disconnecting STOMP client');
+      client.deactivate();
+    };
+  }, []);
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -17,34 +58,15 @@ export default function HomeScreen() {
       }>
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+      <ThemedView style={styles.priceContainer}>
+        {error ? (
+          <ThemedText type="error">{error}</ThemedText>
+        ) : (
+          <ThemedText type="subtitle">
+            {price !== null ? `Current Price: ${price}` : 'Fetching price...'}
+          </ThemedText>
+        )}
       </ThemedView>
     </ParallaxScrollView>
   );
@@ -56,9 +78,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  priceContainer: {
+    marginTop: 20,
+    padding: 16,
   },
   reactLogo: {
     height: 178,
